@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
 Bug Fix and Feature Improvement Description:
-- Fixed the board rendering to use a light brown color for the dark squares instead of light gray.
-- Implemented the requested feature of using PNG images from the assets folder to represent chess pieces instead of text abbreviations.
-    • Added a load_images() method inside the UIManager class that loads and scales the chess piece images.
-    • Updated draw_piece_at() and draw_dragging_piece() methods to render images from the loaded dictionary.
-- Maintained the drag-and-drop functionality and ensured that the image representation of pieces is responsive.
-- Kept backward compatibility with existing game_logic.py and ai_opponent.py files.
+- Fixed the board orientation so that White is displayed at the bottom and Black at the top.
+  • Updated mouse event handling to translate screen coordinates to board coordinates with a vertical flip.
+  • Updated board rendering (draw_board and draw_pieces) to draw rows in reversed order.
+- Changed the dark square color to a light brown (using LIGHT_BROWN) as requested.
+- Implemented the feature to represent chess pieces using PNG images from the assets folder.
+  • Added a load_images() method that loads and scales images based on a naming convention (e.g. assets/white_king.png).
+  • Updated draw_piece_at() and draw_dragging_piece() methods to render the images.
+- Maintained drag-and-drop functionality, ensuring that dragging pieces are rendered with a highlight.
+- Kept backward compatibility with game_logic.py and ai_opponent.py.
 """
 
 import sys
@@ -40,6 +43,7 @@ class UIManager:
         # Drag and drop variables
         self.dragging = False
         self.selected_piece = None
+        # start_cell stores the board coordinate (row, col) with row 0 at the bottom.
         self.start_cell = None
         self.drag_offset = (0, 0)
         self.drag_pos = (0, 0)
@@ -76,12 +80,14 @@ class UIManager:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            
+                
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mx, my = event.pos
                     col = mx // self.tile_size
-                    row = my // self.tile_size
+                    # Transform y coordinate: board row 0 at bottom
+                    row_from_top = my // self.tile_size
+                    row = self.rows - 1 - row_from_top
                     # Ensure indices are within board boundaries
                     if 0 <= row < self.rows and 0 <= col < self.cols:
                         piece = self.game.board.board[row][col]
@@ -90,7 +96,8 @@ class UIManager:
                             self.selected_piece = piece
                             self.start_cell = (row, col)
                             cell_x = col * self.tile_size
-                            cell_y = row * self.tile_size
+                            # Recalculate cell_y from the flipped board: 
+                            cell_y = (self.rows - 1 - row) * self.tile_size
                             self.drag_offset = (mx - cell_x, my - cell_y)
             
             elif event.type == pygame.MOUSEMOTION:
@@ -101,7 +108,8 @@ class UIManager:
                 if event.button == 1 and self.dragging:
                     mx, my = event.pos
                     end_col = mx // self.tile_size
-                    end_row = my // self.tile_size
+                    end_row_from_top = my // self.tile_size
+                    end_row = self.rows - 1 - end_row_from_top
                     # Attempt move if drop is within board bounds
                     if 0 <= end_row < self.rows and 0 <= end_col < self.cols:
                         end_cell = (end_row, end_col)
@@ -119,62 +127,68 @@ class UIManager:
             self.draw_dragging_piece()
 
     def draw_board(self):
+        # Draw the board so that row 0 is at the bottom of the screen.
         for row in range(self.rows):
+            # Calculate y-coordinate on screen: reverse the row order.
+            screen_y = (self.rows - 1 - row) * self.tile_size
             for col in range(self.cols):
                 # Alternate colors: white and light brown
                 if (row + col) % 2 == 0:
                     color = WHITE
                 else:
                     color = LIGHT_BROWN
-                rect = pygame.Rect(col * self.tile_size, row * self.tile_size, self.tile_size, self.tile_size)
+                rect = pygame.Rect(col * self.tile_size, screen_y, self.tile_size, self.tile_size)
                 pygame.draw.rect(self.screen, color, rect)
                 # Draw grid lines
                 pygame.draw.rect(self.screen, DARK_GRAY, rect, 1)
 
     def draw_pieces(self):
         board_arr = self.game.board.board
+        # Iterate through board coordinates: row 0 is bottom, row 7 is top.
         for row in range(self.rows):
             for col in range(self.cols):
                 piece = board_arr[row][col]
-                # Skip drawing the piece if it is currently being dragged
+                # Skip drawing the piece if it is currently being dragged.
                 if self.dragging and self.start_cell == (row, col):
                     continue
                 if piece:
-                    self.draw_piece_at(piece, (col * self.tile_size, row * self.tile_size))
+                    # Calculate the screen position with board flipping.
+                    pos = (col * self.tile_size, (self.rows - 1 - row) * self.tile_size)
+                    self.draw_piece_at(piece, pos)
 
     def draw_piece_at(self, piece, pos):
-        # Draw the piece using its corresponding image from the assets
+        # Draw the piece using its corresponding image from the assets.
         image = self.images.get((piece.color, piece.__class__.__name__))
         if image:
             self.screen.blit(image, pos)
         else:
-            # Fallback: Render the first letter if the image is missing
+            # Fallback: Render the first letter if the image is missing.
             abbrev = piece.__class__.__name__[0]
             if piece.__class__.__name__ == "Knight":
                 abbrev = "N"
-            color = BLACK if piece.color == 'white' else DARK_GRAY
-            text_surface = self.font.render(abbrev, True, color)
+            text_color = BLACK if piece.color == 'white' else DARK_GRAY
+            text_surface = self.font.render(abbrev, True, text_color)
             text_rect = text_surface.get_rect(center=(pos[0] + self.tile_size // 2, pos[1] + self.tile_size // 2))
             self.screen.blit(text_surface, text_rect)
 
     def draw_dragging_piece(self):
-        # Draw the dragging piece at the current mouse position offset properly with a highlight
+        # Draw the dragging piece at the current mouse position with the proper offset and a highlight.
         if self.selected_piece:
             image = self.images.get((self.selected_piece.color, self.selected_piece.__class__.__name__))
             mx, my = self.drag_pos
             blit_pos = (mx - self.drag_offset[0], my - self.drag_offset[1])
             center = (blit_pos[0] + self.tile_size // 2, blit_pos[1] + self.tile_size // 2)
-            # Draw a highlight circle behind the piece
+            # Draw a highlight circle behind the piece.
             pygame.draw.circle(self.screen, HIGHLIGHT, center, self.tile_size // 2 - 5)
             if image:
                 self.screen.blit(image, blit_pos)
             else:
-                # Fallback: Render the first letter if the image is missing
+                # Fallback: Render the first letter if the image is missing.
                 abbrev = self.selected_piece.__class__.__name__[0]
                 if self.selected_piece.__class__.__name__ == "Knight":
                     abbrev = "N"
-                color = BLACK if self.selected_piece.color == 'white' else DARK_GRAY
-                text_surface = self.font.render(abbrev, True, color)
+                text_color = BLACK if self.selected_piece.color == 'white' else DARK_GRAY
+                text_surface = self.font.render(abbrev, True, text_color)
                 text_rect = text_surface.get_rect(center=center)
                 self.screen.blit(text_surface, text_rect)
 
