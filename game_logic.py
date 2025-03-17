@@ -89,14 +89,20 @@ class Game:
         if self.board.move_piece(start, end):
             self.move_history.append((start, end))
             print(f"Moved {piece.__class__.__name__} from {start} to {end}.")
-            # Check win condition by ensuring each color's king is present on the board.
-            if not self.is_king_present('black'):
-                print("White wins!")
-            elif not self.is_king_present('white'):
-                print("Black wins!")
-            else:
-                self.switch_turn()
-            return True
+            
+            # Switch turns first to check opponent's status
+            self.switch_turn()
+            
+            # Check for checkmate or stalemate
+            if self.board.is_checkmate(self.current_turn):
+                print(f"{self.current_turn.capitalize()} is in checkmate! {piece.color.capitalize()} wins!")
+                return "checkmate"
+            elif self.board.is_stalemate(self.current_turn):
+                print(f"{self.current_turn.capitalize()} is in stalemate! The game is a draw.")
+                return "stalemate"
+            
+            # Game continues
+            return "continue"
         else:
             print(f"Failed to move piece from {start} to {end}.")
             return False

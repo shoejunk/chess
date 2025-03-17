@@ -23,7 +23,7 @@ Bug Fix and Feature Improvement Description:
 - Kept backward compatibility with game_logic.py and ai_opponent.py.
   
 - Additional improvements:
-  • Added a short delay before the AI move to simulate “thinking” time and let the user see the board update.
+  • Added a short delay before the AI move to simulate "thinking" time and let the user see the board update.
   
 Run the script to launch the game. White (user-controlled) can move their pieces via drag-and-drop, while Black pieces are moved automatically by the AI.
 """
@@ -67,6 +67,11 @@ class UIManager:
         
         # Initialize the AI for black pieces
         self.ai_player = AIPlayer('black')
+        
+        # Game state
+        self.game_over = False
+        self.game_result = None
+        self.winner = None
     
     def load_images(self):
         """
@@ -89,8 +94,8 @@ class UIManager:
         running = True
         while running:
             self.handle_events()
-            # Only allow drag-drop events if it's White's turn
-            if self.game.current_turn == 'black' and not self.dragging:
+            # Only allow drag-drop events if it's White's turn and game is not over
+            if self.game.current_turn == 'black' and not self.dragging and not self.game_over:
                 self.execute_ai_move()
             self.render()
             pygame.display.flip()
@@ -103,6 +108,13 @@ class UIManager:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+                
+            # If game is over, only allow quit event and restart on mouse click
+            if self.game_over:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    # Restart the game if clicked anywhere on the end game screen
+                    self.restart_game()
+                continue
                 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
@@ -140,7 +152,11 @@ class UIManager:
                     if 0 <= end_row < self.rows and 0 <= end_col < self.cols:
                         end_cell = (end_row, end_col)
                         if self.start_cell != end_cell:
-                            self.game.make_move(self.start_cell, end_cell)
+                            result = self.game.make_move(self.start_cell, end_cell)
+                            if result in ["checkmate", "stalemate"]:
+                                self.game_over = True
+                                self.game_result = result
+                                self.winner = 'white' if result == "checkmate" else None
                     self.dragging = False
                     self.selected_piece = None
                     self.start_cell = None
@@ -156,10 +172,17 @@ class UIManager:
             if move:
                 # Delay to let the player see the board before the AI move is executed.
                 pygame.time.wait(500)
-                self.game.make_move(*move)
+                result = self.game.make_move(*move)
                 print(f"AI moves from {move[0]} to {move[1]}")
+                if result in ["checkmate", "stalemate"]:
+                    self.game_over = True
+                    self.game_result = result
+                    self.winner = 'black' if result == "checkmate" else None
             else:
                 print("AI has no valid moves. The game is a stalemate.")
+                self.game_over = True
+                self.game_result = "stalemate"
+                self.winner = None
     
     def render(self):
         self.screen.fill(BLACK)
@@ -167,6 +190,10 @@ class UIManager:
         self.draw_pieces()
         if self.dragging and self.selected_piece is not None:
             self.draw_dragging_piece()
+            
+        # Draw end game screen if game is over
+        if self.game_over:
+            self.draw_end_game_screen()
 
     def draw_board(self):
         # Draw the board so that row 0 is at the bottom of the screen.
@@ -233,6 +260,49 @@ class UIManager:
                 text_surface = self.font.render(abbrev, True, text_color)
                 text_rect = text_surface.get_rect(center=center)
                 self.screen.blit(text_surface, text_rect)
+
+    def draw_end_game_screen(self):
+        """Draw the end game screen showing the game result."""
+        # Semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))  # Black with 70% opacity
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw result text
+        if self.game_result == "checkmate":
+            title_text = f"{self.winner.capitalize()} Wins!"
+            subtitle_text = "Checkmate"
+        else:  # stalemate
+            title_text = "Draw!"
+            subtitle_text = "Stalemate"
+            
+        # Title text (larger)
+        title_font = pygame.font.SysFont(None, 72)
+        title_surface = title_font.render(title_text, True, WHITE)
+        title_rect = title_surface.get_rect(center=(self.width // 2, self.height // 2 - 40))
+        self.screen.blit(title_surface, title_rect)
+        
+        # Subtitle text (smaller)
+        subtitle_font = pygame.font.SysFont(None, 36)
+        subtitle_surface = subtitle_font.render(subtitle_text, True, WHITE)
+        subtitle_rect = subtitle_surface.get_rect(center=(self.width // 2, self.height // 2 + 20))
+        self.screen.blit(subtitle_surface, subtitle_rect)
+        
+        # Click to play again text
+        restart_font = pygame.font.SysFont(None, 28)
+        restart_surface = restart_font.render("Click anywhere to play again", True, WHITE)
+        restart_rect = restart_surface.get_rect(center=(self.width // 2, self.height // 2 + 80))
+        self.screen.blit(restart_surface, restart_rect)
+        
+    def restart_game(self):
+        """Reset the game state to start a new game."""
+        self.game = Game()
+        self.dragging = False
+        self.selected_piece = None
+        self.start_cell = None
+        self.game_over = False
+        self.game_result = None
+        self.winner = None
 
 if __name__ == "__main__":
     ui = UIManager()

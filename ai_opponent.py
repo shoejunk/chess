@@ -9,7 +9,24 @@ class AIPlayer:
         self.color = color
     
     def select_move(self, game):
-        valid_moves = self.generate_valid_moves(game)
+        """
+        Select the best move for the AI player.
+        Currently uses a simple strategy of selecting a random valid move.
+        Returns the selected move as a tuple of ((start_row, start_col), (end_row, end_col)) or None if no valid moves.
+        """
+        valid_moves = []
+        # Find all pieces of the AI's color
+        for row in range(8):
+            for col in range(8):
+                piece = game.board.board[row][col]
+                if piece and piece.color == self.color:
+                    # For each piece, find all valid moves
+                    for end_row in range(8):
+                        for end_col in range(8):
+                            if game.board.is_valid_move(piece, (end_row, end_col)):
+                                valid_moves.append(((row, col), (end_row, end_col)))
+        
+        # Return a random valid move or None if no valid moves
         if valid_moves:
             return random.choice(valid_moves)
         return None

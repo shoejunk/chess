@@ -165,6 +165,49 @@ class Board:
         else:
             return False
 
+    def is_king_in_check(self, color):
+        """Check if the king of the given color is in check."""
+        king_pos = None
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if isinstance(piece, King) and piece.color == color:
+                    king_pos = (r, c)
+                    break
+            if king_pos:
+                break
+        
+        if not king_pos:
+            return False  # No king found (shouldn't happen in a normal game)
+        
+        return self.is_square_under_attack(king_pos, color)
+    
+    def has_valid_moves(self, color):
+        """Check if the given color has any valid moves."""
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece is None or piece.color != color:
+                    continue
+                
+                # Try all possible target squares for this piece
+                for tr in range(8):
+                    for tc in range(8):
+                        if self.is_valid_move(piece, (tr, tc)):
+                            return True
+        
+        return False
+    
+    def is_checkmate(self, color):
+        """Check if the given color is in checkmate."""
+        # King must be in check and there must be no valid moves
+        return self.is_king_in_check(color) and not self.has_valid_moves(color)
+    
+    def is_stalemate(self, color):
+        """Check if the given color is in stalemate."""
+        # King must not be in check and there must be no valid moves
+        return not self.is_king_in_check(color) and not self.has_valid_moves(color)
+
     def print_board(self):
         for row in self.board:
             print(' '.join([type(piece).__name__[0] if piece else '.' for piece in row]))
